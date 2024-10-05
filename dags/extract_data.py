@@ -6,14 +6,16 @@ import requests
 import json
 from datetime import datetime
 from airflow.decorators import dag, task
+from airflow.models.param import Param
+import os.path 
 
 tamanho_pagina = 100
 url_base = "https://api.obrasgov.gestao.gov.br"
 endpoint = "/obrasgov/api/execucao-financeira"
 current_year = datetime.now().year
-ano_final = str(current_year)
-ano_inicial = str(current_year)
-dest_path = '../../database/dest/bronze/execucao-financeira'
+ano_inicial = int(current_year)
+ano_final = int(current_year)
+dest_path = '/home/adriano/Documentos/airflow/database/dest/bronze/execucao-financeira'
 
 def generate_url(url_base, endpoint, parameters):
     url = url_base + endpoint
@@ -29,7 +31,7 @@ def generate_url(url_base, endpoint, parameters):
     return url
 
 @task()
-def extract_data_api(url_base, endpoint, ano_final, ano_inicial, dest_path, tamanho_pagina=100):
+def extract_data_api(url_base, endpoint, ano, dest_path, tamanho_pagina = 100):
     success = False
     pagina = 0
     errors_consecutives = 0
@@ -39,18 +41,19 @@ def extract_data_api(url_base, endpoint, ano_final, ano_inicial, dest_path, tama
     executions = 0
     executions_limit = 200
     method = "GET"
-
-    shutil.rmtree(dest_path)
+    dest_path_file = dest_path + '/' + str(ano) + '.json'
 
     Path(dest_path).mkdir(parents=True, exist_ok=True)
+
+    if os.path.isfile(dest_path_file) == True:
+        shutil.rmtree(dest_path_file)
 
     content_all = []
 
     while success == False and errors_consecutives < errors_consecutives_limit and errors < errors_limit and executions < executions_limit:
-        url = url_base + endpoint + '?' + 'pagina=' + str(pagina) + '&' + 'tamanhoDaPagina=' + str(tamanho_pagina) + '&' + 'anoFinal=' + str(current_year) + '&' + 'anoInicial=' + str(current_year) 
+        url = url_base + endpoint + '?' + 'pagina=' + str(pagina) + '&' + 'tamanhoDaPagina=' + str(tamanho_pagina) + '&' + 'anoFinal=' + str(ano) + '&' + 'anoInicial=' + str(ano) 
         response = requests.request(method, url)
         if response.status_code == 200:
-            dest_path_file = dest_path + '/' + str(current_year) + '_' + str(pagina) + '.json'
             pagina += 1
             errors_consecutives = 0
             executions += 1
@@ -77,18 +80,36 @@ def extract_data_api(url_base, endpoint, ano_final, ano_inicial, dest_path, tama
         print('Execução Finalizada com sucesso!')
     else:
         print('Execução Finalizada com falha!')
-
-    dest_path_file = dest_path + '/' + str(ano_inicial) + '_' + str(ano_final) + '.json'
+        if errors_consecutives < errors_consecutives_limit:
+            raise Exception("Número de erros consecutivos excedido")
+        elif errors < errors_limit:
+            raise Exception("Número de erros total excedido")
+        elif executions < executions_limit:
+            raise Exception("Número de execuções excedido")
 
     with open(dest_path_file, 'w', encoding='utf-8') as f:
-        json.dump(content_all, f, ensure_ascii=False, indent=4)
+        json.dump(content_all, f)
+    f.close()
         
 @dag(
     schedule = '@daily',
     start_date = datetime.now(),
-    catchup = False
+    catchup = False,
+    params ={
+        "ano_inicial": Param(
+            ano_inicial,
+            type="integer",
+        ),
+        "ano_final": Param(
+            ano_final,
+            type="integer",
+        )
+    }
 )
-def get_api_data(url_base, endpoint, ano_final, ano_inicial, dest_path, tamanho_pagina):
-    extract_data_api.override(task_id='execucao-financeira')(url_base, endpoint, ano_final, ano_inicial, dest_path, tamanho_pagina)
+def get_api_data(url_base, endpoint, ano_inicial, ano_final, dest_path, tamanho_pagina):
+    dif_anos = (ano_final - ano_inicial) + 1
+    for i in range(dif_anos):
+        ano = ano_inicial + i
+        extract_data_api.override(task_id='execucao-financeira')(url_base, endpoint, ano, dest_path, tamanho_pagina)
 
-dag = get_api_data(url_base, endpoint, ano_final, ano_inicial, dest_path, tamanho_pagina)
+dag = get_api_data(url_base, endpoint, ano_inicial, ano_final, dest_path, tamanho_pagina)
