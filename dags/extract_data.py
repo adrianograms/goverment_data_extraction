@@ -47,6 +47,7 @@ def extract_data_api(url_base, endpoint, ano_final, ano_inicial, dest_path, tama
     content_all = []
 
     while success == False and errors_consecutives < errors_consecutives_limit and errors < errors_limit and executions < executions_limit:
+        url = url_base + endpoint + '?' + 'pagina=' + str(pagina) + '&' + 'tamanhoDaPagina=' + str(tamanho_pagina) + '&' + 'anoFinal=' + str(current_year) + '&' + 'anoInicial=' + str(current_year) 
         response = requests.request(method, url)
         if response.status_code == 200:
             dest_path_file = dest_path + '/' + str(current_year) + '_' + str(pagina) + '.json'
@@ -64,7 +65,6 @@ def extract_data_api(url_base, endpoint, ano_final, ano_inicial, dest_path, tama
             executions += 1
             if response.status_code == 429:
                 time.sleep(1)
-        url = url_base + endpoint + '?' + 'pagina=' + str(pagina) + '&' + 'tamanhoDaPagina=' + str(tamanho_pagina) + '&' + 'anoFinal=' + str(current_year) + '&' + 'anoInicial=' + str(current_year) 
         print(f'Status Code: {response.status_code}\n'
             f'Executions: {executions}\n'
             f'Pagina: {pagina}\n' 
@@ -84,7 +84,8 @@ def extract_data_api(url_base, endpoint, ano_final, ano_inicial, dest_path, tama
         json.dump(content_all, f, ensure_ascii=False, indent=4)
         
 @dag(
-    schedule_interval = 'daily',
+    schedule = '@daily',
+    start_date = datetime.now(),
     catchup = False
 )
 def get_api_data(url_base, endpoint, ano_final, ano_inicial, dest_path, tamanho_pagina):
