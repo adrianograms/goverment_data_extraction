@@ -167,6 +167,7 @@ standalone_admin_password.txt
 airflow.db
 airflow.cfg
 webserver_config.py
+airflow-webserver.pid
 
 
 # database

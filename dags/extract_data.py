@@ -46,7 +46,7 @@ def extract_data_api(url_base, endpoint, ano, dest_path, tamanho_pagina = 100):
     Path(dest_path).mkdir(parents=True, exist_ok=True)
 
     if os.path.isfile(dest_path_file) == True:
-        shutil.rmtree(dest_path_file)
+        os.remove(dest_path_file)
 
     content_all = []
 
@@ -90,26 +90,34 @@ def extract_data_api(url_base, endpoint, ano, dest_path, tamanho_pagina = 100):
     with open(dest_path_file, 'w', encoding='utf-8') as f:
         json.dump(content_all, f)
     f.close()
+
+@task()
+def generate_dates(ano_inicial, ano_final):
+    anos = []
+    for ano in range(int(ano_inicial), int(ano_final) + 1):
+        anos.append(ano)
+    return anos
+
+@task()
+def generate_taks(url_base, endpoint, ano_inicial, ano_final, dest_path, tamanho_pagina):
+    tasks = []
+    for ano in range(int(ano_inicial), int(ano_final) + 1):
+        print(f'Iniciando extração para o ano: {ano}')
+        extract_data_api.override(task_id=f'execucao_financeira_{ano}')(url_base, endpoint, ano, dest_path, tamanho_pagina)
         
 @dag(
     schedule = '@daily',
     start_date = datetime.now(),
     catchup = False,
-    params ={
-        "ano_inicial": Param(
-            ano_inicial,
-            type="integer",
-        ),
-        "ano_final": Param(
-            ano_final,
-            type="integer",
-        )
-    }
+    params={
+        "ano_inicial": Param(ano_inicial, type="integer"),
+        "ano_final": Param(ano_final, type="integer"),
+    },
 )
 def get_api_data(url_base, endpoint, ano_inicial, ano_final, dest_path, tamanho_pagina):
-    dif_anos = (ano_final - ano_inicial) + 1
-    for i in range(dif_anos):
-        ano = ano_inicial + i
-        extract_data_api.override(task_id='execucao-financeira')(url_base, endpoint, ano, dest_path, tamanho_pagina)
+    #extract_data_api.override(task_id='execucao-financeira')(url_base, endpoint, ano, dest_path, tamanho_pagina)
+    anos = generate_dates(ano_inicial, ano_final)
+    extract_data_api.partial(url_base=url_base, endpoint=endpoint, dest_path=dest_path, tamanho_pagina=tamanho_pagina).expand(ano=anos)
+    #generate_taks(url_base, endpoint, ano_inicial, ano_final, dest_path, tamanho_pagina)
 
 dag = get_api_data(url_base, endpoint, ano_inicial, ano_final, dest_path, tamanho_pagina)
