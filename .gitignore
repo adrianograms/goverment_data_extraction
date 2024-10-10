@@ -172,6 +172,7 @@ airflow-webserver.pid
 
 # database
 database/
+jdbc/
 
 #logs
 logs/
