@@ -1,13 +1,17 @@
 import time
 import json
 from pathlib import Path
-import shutil
 import requests
 import json
 from datetime import datetime
 from airflow.decorators import dag, task
 from airflow.models.param import Param
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import input_file_name, substring
 import os.path 
+import jaydebeapi
+import os
+from dotenv import load_dotenv
 
 page_size = 100
 url_base = "https://api.obrasgov.gestao.gov.br"
@@ -97,6 +101,39 @@ def generate_dates(initial_year, final_year):
     for year in range(int(initial_year), int(final_year) + 1):
         years.append(year)
     return years
+
+@task()
+def extract_data_json(year, origin):
+    dotenv_path = Path('/home/adriano/Documentos/airflow/.env')
+    load_dotenv(dotenv_path=dotenv_path)
+    user_dw = os.getenv('USER_DW')
+    password_dw = os.getenv('PASSWORD_DW')
+    host_dw = os.getenv('HOST_DW')
+    database_dw = os.getenv('DATABASE_DW')
+    port_dw = os.getenv('PORT_DW')
+    driver = os.getenv('DRIVER_JDBC_POSTGRES')
+    path_jdbc = os.getenv('PATH_JDBC_POSTGRES')
+    url = f'jdbc:postgresql://{host_dw}:{port_dw}/{database_dw}'
+
+    spark = SparkSession\
+        .builder\
+        .appName("Extraction_Data")\
+        .config("spark.driver.extraClassPath", path_jdbc)\
+        .getOrCreate()
+    origin_file = origin + '/' + str(year)+ '.json'
+    if os.path.isfile(origin_file) == True:
+        df = spark.read.json(origin_file)
+        df = df.withColumn('nomeArquivo',substring(input_file_name(),-9,4))
+    else:
+        raise Exception("File dosen't exist!")
+
+    conn = jaydebeapi.connect(driver, url, [user_dw, password_dw], path_jdbc)
+    curs = conn.cursor()
+    curs.execute(f'''delete from stg_execucao_financeira where "nomeArquivo" = '{year}' ''')
+
+    mode = 'append'
+    properties = {"user": user_dw, "password": password_dw, "driver": driver}
+    df.write.jdbc(url=url, table='stg_execucao_financeira', mode=mode, properties=properties)
         
 @dag(
     schedule = '@daily',
@@ -109,7 +146,12 @@ def generate_dates(initial_year, final_year):
 ) 
 def get_api_data(url_base, endpoint, initial_year, final_year, dest_path, page_size, errors_limit, errors_consecutives_limit, executions_limit):
     years = generate_dates(initial_year, final_year)
-    extract_data_api.partial(url_base=url_base, endpoint=endpoint, dest_path=dest_path, page_size=page_size,
+
+    extract_api = extract_data_api.partial(url_base=url_base, endpoint=endpoint, dest_path=dest_path, page_size=page_size,
                              errors_limit = errors_limit, errors_consecutives_limit = errors_consecutives_limit, executions_limit = executions_limit).expand(year=years)
+    
+    extract_json = extract_data_json.partial(origin=dest_path).expand(year=years)
+
+    extract_api >> extract_json
 
 dag = get_api_data(url_base, endpoint, initial_year, final_year, dest_path, page_size, errors_limit, errors_consecutives_limit, executions_limit)
