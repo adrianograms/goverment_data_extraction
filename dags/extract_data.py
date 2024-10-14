@@ -232,7 +232,15 @@ def delete_stg_projeto_investimento(date, date_before):
 
     conn = jaydebeapi.connect(driver, url, [user_dw, password_dw], path_jdbc)
     curs = conn.cursor()
-    curs.execute(f'''delete from stg_projeto_investimento_eixos where "datacadastro" between '{date_before}' and '{date}' ''')
+    curs.execute(f'''delete from stg_projeto_investimento_eixos     where "datacadastro" between '{date_before}' and '{date}';
+                 delete from stg_projeto_investimento_tomadores     where "datacadastro" between '{date_before}' and '{date}';
+                 delete from stg_projeto_investimento_executores    where "datacadastro" between '{date_before}' and '{date}';
+                 delete from stg_projeto_investimento_repassadores  where "datacadastro" between '{date_before}' and '{date}';
+                 delete from stg_projeto_investimento_tipos         where "datacadastro" between '{date_before}' and '{date}';
+                 delete from stg_projeto_investimento_sub_tipos     where "datacadastro" between '{date_before}' and '{date}';
+                 delete from stg_projeto_investimento_geometria     where "datacadastro" between '{date_before}' and '{date}';
+                 delete from stg_projeto_investimento_fontes_de_recurso where "datacadastro" between '{date_before}' and '{date}';
+                 delete from stg_projeto_investimento               where "datacadastro" between '{date_before}' and '{date}';''')
 
 
 @task_group()
@@ -249,6 +257,9 @@ def extract_projeto_investimento(url_base, endpoint, days, page_size, errors_lim
     dates, date_before = generate_dates(today, days)
     extract_api = extract_data_api_projecto_investimento_date.partial(url_base=url_base, endpoint=endpoint, page_size=page_size,
                              errors_limit = errors_limit, errors_consecutives_limit = errors_consecutives_limit, executions_limit = executions_limit).expand(date=dates)
+    del_stgs = delete_stg_projeto_investimento(today, date_before)
+
+    
 
 @dag(
     schedule = '@daily',
