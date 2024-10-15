@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 from airflow.decorators import dag, task, task_group
 from airflow.models.param import Param
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import input_file_name, substring
+from pyspark.sql.functions import input_file_name, substring, explode, to_date, col
+from pyspark.sql.types import ArrayType
 import os.path 
 import jaydebeapi
 import os
@@ -184,7 +185,7 @@ def generate_dates(date, days):
 
     for d in date_generated:
         days_date.append(str(d.strftime('%Y-%m-%d')))
-    return days_date, date_before
+    return days_date
 
 @task(max_active_tis_per_dag=1)
 def extract_data_json(year):
@@ -218,8 +219,84 @@ def extract_data_json(year):
     properties = {"user": user_dw, "password": password_dw, "driver": driver}
     df.write.jdbc(url=url, table='stg_execucao_financeira', mode=mode, properties=properties)
 
+@task()
+def extract_json_projeto_investimento_date(date):
+    user_dw = os.getenv('USER_DW')
+    password_dw = os.getenv('PASSWORD_DW')
+    host_dw = os.getenv('HOST_DW')
+    database_dw = os.getenv('DATABASE_DW')
+    port_dw = os.getenv('PORT_DW')
+    driver = os.getenv('DRIVER_JDBC_POSTGRES')
+    path_jdbc = os.getenv('PATH_JDBC_POSTGRES')
+    origin = os.getenv('PATH_DEST')
+    url = f'jdbc:postgresql://{host_dw}:{port_dw}/{database_dw}'
+    mode = 'append'
+    properties = {"user": user_dw, "password": password_dw, "driver": driver}
+
+    spark = SparkSession\
+        .builder\
+        .appName("Extraction_Data")\
+        .config("spark.driver.extraClassPath", path_jdbc)\
+        .getOrCreate()
+    origin_file = origin + '/' + str(date)+ '.json'
+    if os.path.isfile(origin_file) == True:
+        df = spark.read.json(origin_file)
+        df = df.withColumn('nomeArquivo',substring(input_file_name(),-9,4))
+    else:
+        raise Exception("File dosen't exist!")
+
+    df_fonte_recursos = df.withColumn("fontesDeRecurso1", explode("fontesDeRecurso")).select("idUnico","dataCadastro","fontesDeRecurso1.*")
+    df_fonte_recursos = df_fonte_recursos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+    df_fonte_recursos.write.jdbc(url=url, table='stg_projeto_investimento_fontes_de_recurso', mode=mode, properties=properties)
+
+    df_geometria = df.withColumn("geometria1", explode("geometria")).select("idUnico","dataCadastro","geometria1.*")
+    df_geometria = df_geometria.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+    df_geometria = df_geometria.withColumn("dataCriacao", to_date(col("dataCriacao"), "yyyy-MM-dd"))
+    df_geometria = df_geometria.withColumn("dataMetadado", to_date(col("dataMetadado"), "yyyy-MM-dd"))
+    df_geometria.write.jdbc(url=url, table='stg_projeto_investimento_geometria', mode=mode, properties=properties)
+
+    df_sub_tipos = df.withColumn("subTipos1", explode("subTipos")).select("idUnico","dataCadastro","subTipos1.*")
+    df_sub_tipos = df_sub_tipos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+    df_sub_tipos.write.jdbc(url=url, table='stg_projeto_investimento_sub_tipos', mode=mode, properties=properties)
+
+    df_tipos = df.withColumn("tipos1", explode("tipos")).select("idUnico","dataCadastro","tipos1.*")
+    df_tipos = df_tipos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+    df_tipos.write.jdbc(url=url, table='stg_projeto_investimento_tipos', mode=mode, properties=properties)
+
+    df_repassadores = df.withColumn("repassadores1", explode("repassadores")).select("idUnico","dataCadastro","repassadores1.*")
+    df_repassadores = df_repassadores.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+    df_repassadores.write.jdbc(url=url, table='stg_projeto_investimento_repassadores', mode=mode, properties=properties)
+
+    df_executores = df.withColumn("executores1", explode("executores")).select("idUnico","dataCadastro","executores1.*")
+    df_executores = df_executores.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+    df_executores.write.jdbc(url=url, table='stg_projeto_investimento_executores', mode=mode, properties=properties)
+
+    df_tomadores = df.withColumn("tomadores1", explode("tomadores")).select("idUnico","dataCadastro","tomadores1.*")
+    df_tomadores = df_tomadores.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+    df_tomadores.write.jdbc(url=url, table='stg_projeto_investimento_tomadores', mode=mode, properties=properties)
+
+    df_eixos = df.withColumn("eixos1", explode("eixos")).select("idUnico","dataCadastro","eixos1.*")
+    df_eixos = df_eixos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+    df_eixos.write.jdbc(url=url, table='stg_projeto_investimento_eixos', mode=mode, properties=properties)
+
+    drop_columns = []
+    for column in df.schema:
+        if type(column.dataType) == ArrayType:
+            drop_columns.append(column.name)
+
+    df_projeto_investimento = df.drop(*drop_columns)
+    df_projeto_investimento = df_projeto_investimento.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+    df_projeto_investimento = df_projeto_investimento.withColumn("dataInicialPrevista", to_date(col("dataInicialPrevista"), "yyyy-MM-dd"))
+    df_projeto_investimento = df_projeto_investimento.withColumn("dataFinalPrevista", to_date(col("dataFinalPrevista"), "yyyy-MM-dd"))
+    df_projeto_investimento = df_projeto_investimento.withColumn("dataInicialEfetiva", to_date(col("dataInicialEfetiva"), "yyyy-MM-dd"))
+    df_projeto_investimento = df_projeto_investimento.withColumn("dataFinalEfetiva", to_date(col("dataFinalEfetiva"), "yyyy-MM-dd"))
+    df_projeto_investimento = df_projeto_investimento.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+    df_projeto_investimento = df_projeto_investimento.withColumn("dataSituacao", to_date(col("dataSituacao"), "yyyy-MM-dd"))
+    df_projeto_investimento.write.jdbc(url=url, table='stg_projeto_investimento', mode=mode, properties=properties)
+
+
 @task(max_active_tis_per_dag=1)
-def delete_stg_projeto_investimento(date, date_before):
+def delete_stg_projeto_investimento(date, days):
     user_dw = os.getenv('USER_DW')
     password_dw = os.getenv('PASSWORD_DW')
     host_dw = os.getenv('HOST_DW')
@@ -228,7 +305,7 @@ def delete_stg_projeto_investimento(date, date_before):
     driver = os.getenv('DRIVER_JDBC_POSTGRES')
     path_jdbc = os.getenv('PATH_JDBC_POSTGRES')
     url = f'jdbc:postgresql://{host_dw}:{port_dw}/{database_dw}'
-
+    date_before = date - timedelta(days=days)
 
     conn = jaydebeapi.connect(driver, url, [user_dw, password_dw], path_jdbc)
     curs = conn.cursor()
@@ -254,10 +331,15 @@ def extract_execucao_financeira(url_base, endpoint, initial_year, final_year, pa
 @task_group()
 def extract_projeto_investimento(url_base, endpoint, days, page_size, errors_limit, errors_consecutives_limit, executions_limit):
     today = datetime.now()
-    dates, date_before = generate_dates(today, days)
+    dates = generate_dates(today, days)
+
     extract_api = extract_data_api_projecto_investimento_date.partial(url_base=url_base, endpoint=endpoint, page_size=page_size,
                              errors_limit = errors_limit, errors_consecutives_limit = errors_consecutives_limit, executions_limit = executions_limit).expand(date=dates)
-    del_stgs = delete_stg_projeto_investimento(today, date_before)
+    del_stgs = delete_stg_projeto_investimento(today, days)
+    extract_json = extract_json_projeto_investimento_date.expand(date=dates)
+
+    extract_api >> extract_json
+    del_stgs >> extract_json
 
     
 
@@ -274,7 +356,7 @@ def get_api_data(initial_year, final_year, days, page_size, errors_limit, errors
     url_base = os.getenv('URL_BASE')
     ufs = ['AC']
 
-    extract_exec_fin = extract_execucao_financeira(url_base, '/obrasgov/api/execucao-financeira', initial_year, final_year, page_size, errors_limit, errors_consecutives_limit, executions_limit)
+    #extract_exec_fin = extract_execucao_financeira(url_base, '/obrasgov/api/execucao-financeira', initial_year, final_year, page_size, errors_limit, errors_consecutives_limit, executions_limit)
 
     extract_projct_invest = extract_projeto_investimento(url_base, '/obrasgov/api/projeto-investimento', days, page_size, errors_limit, errors_consecutives_limit, executions_limit)
 
