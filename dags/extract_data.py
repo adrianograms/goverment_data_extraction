@@ -219,7 +219,7 @@ def extract_data_json(year):
     properties = {"user": user_dw, "password": password_dw, "driver": driver}
     df.write.jdbc(url=url, table='stg_execucao_financeira', mode=mode, properties=properties)
 
-@task()
+@task(max_active_tis_per_dag=1)
 def extract_json_projeto_investimento_date(date):
     user_dw = os.getenv('USER_DW')
     password_dw = os.getenv('PASSWORD_DW')
@@ -228,7 +228,7 @@ def extract_json_projeto_investimento_date(date):
     port_dw = os.getenv('PORT_DW')
     driver = os.getenv('DRIVER_JDBC_POSTGRES')
     path_jdbc = os.getenv('PATH_JDBC_POSTGRES')
-    origin = os.getenv('PATH_DEST')
+    origin = os.getenv('PATH_DEST_PROJETO_INVESTIMENTO_DATE')
     url = f'jdbc:postgresql://{host_dw}:{port_dw}/{database_dw}'
     mode = 'append'
     properties = {"user": user_dw, "password": password_dw, "driver": driver}
@@ -249,7 +249,7 @@ def extract_json_projeto_investimento_date(date):
     df_fonte_recursos = df_fonte_recursos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
     df_fonte_recursos.write.jdbc(url=url, table='stg_projeto_investimento_fontes_de_recurso', mode=mode, properties=properties)
 
-    df_geometria = df.withColumn("geometria1", explode("geometria")).select("idUnico","dataCadastro","geometria1.*")
+    df_geometria = df.withColumn("geometrias1", explode("geometrias")).select("idUnico","dataCadastro","geometrias1.*")
     df_geometria = df_geometria.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
     df_geometria = df_geometria.withColumn("dataCriacao", to_date(col("dataCriacao"), "yyyy-MM-dd"))
     df_geometria = df_geometria.withColumn("dataMetadado", to_date(col("dataMetadado"), "yyyy-MM-dd"))
