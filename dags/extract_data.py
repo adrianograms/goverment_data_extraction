@@ -219,7 +219,7 @@ def extract_data_json(year):
     properties = {"user": user_dw, "password": password_dw, "driver": driver}
     df.write.jdbc(url=url, table='stg_execucao_financeira', mode=mode, properties=properties)
 
-@task(max_active_tis_per_dag=1)
+@task(max_active_tis_per_dag=2)
 def extract_json_projeto_investimento_date(date):
     user_dw = os.getenv('USER_DW')
     password_dw = os.getenv('PASSWORD_DW')
@@ -245,39 +245,61 @@ def extract_json_projeto_investimento_date(date):
     else:
         raise Exception("File dosen't exist!")
 
-    df_fonte_recursos = df.withColumn("fontesDeRecurso1", explode("fontesDeRecurso")).select("idUnico","dataCadastro","fontesDeRecurso1.*")
-    df_fonte_recursos = df_fonte_recursos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
-    df_fonte_recursos.write.jdbc(url=url, table='stg_projeto_investimento_fontes_de_recurso', mode=mode, properties=properties)
+    if df.count() == 0:
+        return
+    
 
-    df_geometria = df.withColumn("geometrias1", explode("geometrias")).select("idUnico","dataCadastro","geometrias1.*")
-    df_geometria = df_geometria.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
-    df_geometria = df_geometria.withColumn("dataCriacao", to_date(col("dataCriacao"), "yyyy-MM-dd"))
-    df_geometria = df_geometria.withColumn("dataMetadado", to_date(col("dataMetadado"), "yyyy-MM-dd"))
-    df_geometria.write.jdbc(url=url, table='stg_projeto_investimento_geometria', mode=mode, properties=properties)
+    if 'fontesDeRecurso' in df.columns:
+        df_fonte_recursos = df.withColumn("fontesDeRecurso1", explode("fontesDeRecurso")).select("idUnico","dataCadastro","fontesDeRecurso1.*")
+        df_fonte_recursos = df_fonte_recursos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+        df_fonte_recursos.write.jdbc(url=url, table='stg_projeto_investimento_fontes_de_recurso', mode=mode, properties=properties)
+        df_fonte_recursos.unpersist()
 
-    df_sub_tipos = df.withColumn("subTipos1", explode("subTipos")).select("idUnico","dataCadastro","subTipos1.*")
-    df_sub_tipos = df_sub_tipos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
-    df_sub_tipos.write.jdbc(url=url, table='stg_projeto_investimento_sub_tipos', mode=mode, properties=properties)
 
-    df_tipos = df.withColumn("tipos1", explode("tipos")).select("idUnico","dataCadastro","tipos1.*")
-    df_tipos = df_tipos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
-    df_tipos.write.jdbc(url=url, table='stg_projeto_investimento_tipos', mode=mode, properties=properties)
+    if 'geometrias' in df.columns:
+        df_geometria = df.withColumn("geometrias1", explode("geometrias")).select("idUnico","dataCadastro","geometrias1.*")
+        df_geometria = df_geometria.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+        df_geometria = df_geometria.withColumn("dataCriacao", to_date(col("dataCriacao"), "yyyy-MM-dd"))
+        df_geometria = df_geometria.withColumn("dataMetadado", to_date(col("dataMetadado"), "yyyy-MM-dd"))
+        df_geometria.write.jdbc(url=url, table='stg_projeto_investimento_geometria', mode=mode, properties=properties)
+        df_geometria.unpersist()
 
-    df_repassadores = df.withColumn("repassadores1", explode("repassadores")).select("idUnico","dataCadastro","repassadores1.*")
-    df_repassadores = df_repassadores.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
-    df_repassadores.write.jdbc(url=url, table='stg_projeto_investimento_repassadores', mode=mode, properties=properties)
+    if 'subTipos' in df.columns:
+        df_sub_tipos = df.withColumn("subTipos1", explode("subTipos")).select("idUnico","dataCadastro","subTipos1.*")
+        df_sub_tipos = df_sub_tipos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+        df_sub_tipos.write.jdbc(url=url, table='stg_projeto_investimento_sub_tipos', mode=mode, properties=properties)
+        df_sub_tipos.unpersist()
 
-    df_executores = df.withColumn("executores1", explode("executores")).select("idUnico","dataCadastro","executores1.*")
-    df_executores = df_executores.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
-    df_executores.write.jdbc(url=url, table='stg_projeto_investimento_executores', mode=mode, properties=properties)
 
-    df_tomadores = df.withColumn("tomadores1", explode("tomadores")).select("idUnico","dataCadastro","tomadores1.*")
-    df_tomadores = df_tomadores.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
-    df_tomadores.write.jdbc(url=url, table='stg_projeto_investimento_tomadores', mode=mode, properties=properties)
+    if 'tipos' in df.columns:
+        df_tipos = df.withColumn("tipos1", explode("tipos")).select("idUnico","dataCadastro","tipos1.*")
+        df_tipos = df_tipos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+        df_tipos.write.jdbc(url=url, table='stg_projeto_investimento_tipos', mode=mode, properties=properties)
+        df_tipos.unpersist()
 
-    df_eixos = df.withColumn("eixos1", explode("eixos")).select("idUnico","dataCadastro","eixos1.*")
-    df_eixos = df_eixos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
-    df_eixos.write.jdbc(url=url, table='stg_projeto_investimento_eixos', mode=mode, properties=properties)
+    if 'repassadores' in df.columns:
+        df_repassadores = df.withColumn("repassadores1", explode("repassadores")).select("idUnico","dataCadastro","repassadores1.*")
+        df_repassadores = df_repassadores.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+        df_repassadores.write.jdbc(url=url, table='stg_projeto_investimento_repassadores', mode=mode, properties=properties)
+        df_repassadores.unpersist()
+
+    if 'executores' in df.columns:
+        df_executores = df.withColumn("executores1", explode("executores")).select("idUnico","dataCadastro","executores1.*")
+        df_executores = df_executores.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+        df_executores.write.jdbc(url=url, table='stg_projeto_investimento_executores', mode=mode, properties=properties)
+        df_executores.unpersist()
+
+    if 'tomadores' in df.columns:
+        df_tomadores = df.withColumn("tomadores1", explode("tomadores")).select("idUnico","dataCadastro","tomadores1.*")
+        df_tomadores = df_tomadores.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+        df_tomadores.write.jdbc(url=url, table='stg_projeto_investimento_tomadores', mode=mode, properties=properties)
+        df_tomadores.unpersist()
+
+    if 'eixos' in df.columns:
+        df_eixos = df.withColumn("eixos1", explode("eixos")).select("idUnico","dataCadastro","eixos1.*")
+        df_eixos = df_eixos.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
+        df_eixos.write.jdbc(url=url, table='stg_projeto_investimento_eixos', mode=mode, properties=properties)
+        df_eixos.unpersist()
 
     drop_columns = []
     for column in df.schema:
@@ -293,6 +315,9 @@ def extract_json_projeto_investimento_date(date):
     df_projeto_investimento = df_projeto_investimento.withColumn("dataCadastro", to_date(col("dataCadastro"), "yyyy-MM-dd"))
     df_projeto_investimento = df_projeto_investimento.withColumn("dataSituacao", to_date(col("dataSituacao"), "yyyy-MM-dd"))
     df_projeto_investimento.write.jdbc(url=url, table='stg_projeto_investimento', mode=mode, properties=properties)
+
+    df_projeto_investimento.unpersist()
+    df.unpersist()
 
 
 @task(max_active_tis_per_dag=1)
