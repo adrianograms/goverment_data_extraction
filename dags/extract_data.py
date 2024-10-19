@@ -220,7 +220,7 @@ def extract_data_json(year):
     df.write.jdbc(url=url, table='stg_execucao_financeira', mode=mode, properties=properties)
 
 @task(max_active_tis_per_dag=2)
-def extract_json_projeto_investimento_date(date):
+def extract_json_projeto_investimento_date(dates):
     user_dw = os.getenv('USER_DW')
     password_dw = os.getenv('PASSWORD_DW')
     host_dw = os.getenv('HOST_DW')
@@ -232,22 +232,27 @@ def extract_json_projeto_investimento_date(date):
     url = f'jdbc:postgresql://{host_dw}:{port_dw}/{database_dw}'
     mode = 'append'
     properties = {"user": user_dw, "password": password_dw, "driver": driver}
+    origins = []
 
     spark = SparkSession\
         .builder\
         .appName("Extraction_Data")\
         .config("spark.driver.extraClassPath", path_jdbc)\
         .getOrCreate()
-    origin_file = origin + '/' + str(date)+ '.json'
-    if os.path.isfile(origin_file) == True:
-        df = spark.read.json(origin_file)
-        df = df.withColumn('nomeArquivo',substring(input_file_name(),-9,4))
-    else:
-        raise Exception("File dosen't exist!")
+    
+    for date in dates:
+        origin_file = origin + f'/{date}.json'
+        if os.path.isfile(origin_file) == True:
+            origins.append(origin_file)
+
+    if len(origins) == 0:
+        return
+    
+    df = spark.read.json(origin_file)
+    df = df.withColumn('nomeArquivo',substring(input_file_name(),-9,4))
 
     if df.count() == 0:
         return
-    
 
     if 'fontesDeRecurso' in df.columns:
         df_fonte_recursos = df.withColumn("fontesDeRecurso1", explode("fontesDeRecurso"))
@@ -377,7 +382,7 @@ def extract_projeto_investimento(url_base, endpoint, days, page_size, errors_lim
     extract_api = extract_data_api_projecto_investimento_date.partial(url_base=url_base, endpoint=endpoint, page_size=page_size,
                              errors_limit = errors_limit, errors_consecutives_limit = errors_consecutives_limit, executions_limit = executions_limit).expand(date=dates)
     del_stgs = delete_stg_projeto_investimento(today, days)
-    extract_json = extract_json_projeto_investimento_date.expand(date=dates)
+    extract_json = extract_json_projeto_investimento_date(dates)
 
     extract_api >> extract_json
     del_stgs >> extract_json
@@ -395,18 +400,8 @@ def extract_projeto_investimento(url_base, endpoint, days, page_size, errors_lim
 ) 
 def get_api_data(initial_year, final_year, days, page_size, errors_limit, errors_consecutives_limit, executions_limit):
     url_base = os.getenv('URL_BASE')
-    ufs = ['AC']
-
-    #extract_exec_fin = extract_execucao_financeira(url_base, '/obrasgov/api/execucao-financeira', initial_year, final_year, page_size, errors_limit, errors_consecutives_limit, executions_limit)
-
+    
+    extract_exec_fin = extract_execucao_financeira(url_base, '/obrasgov/api/execucao-financeira', initial_year, final_year, page_size, errors_limit, errors_consecutives_limit, executions_limit)
     extract_projct_invest = extract_projeto_investimento(url_base, '/obrasgov/api/projeto-investimento', days, page_size, errors_limit, errors_consecutives_limit, executions_limit)
-
-    #extract_api_project = extract_data_api_project.partial(url_base=url_base, endpoint='/obrasgov/api/projeto-investimento', page_size=page_size,
-    #                         errors_limit = errors_limit, errors_consecutives_limit = errors_consecutives_limit, executions_limit = executions_limit).expand(uf=ufs)
-
-    #extract_api = extract_data_api.partial(url_base=url_base, endpoint=endpoint, page_size=page_size,
-    #                         errors_limit = errors_limit, errors_consecutives_limit = errors_consecutives_limit, executions_limit = executions_limit).expand(year=years)
-    #extract_json = extract_data_json.expand(year=years)
-    #extract_api >> extract_json
 
 dag = get_api_data(initial_year, final_year, days, page_size, errors_limit, errors_consecutives_limit, executions_limit)
