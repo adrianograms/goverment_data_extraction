@@ -26,6 +26,15 @@ errors_limit = - 1
 errors_consecutives_limit = 5
 executions_limit = -1
 days = 30
+ufs = ['PR']
+
+def generate_sql_deletion_ufs(tables, ufs):
+    sql_full = ''
+    for table in tables:
+        sql_full += f'''delete from {table} stg
+                        using stg_projeto_investimento stg_project
+                        where stg_project."idunico" = stg."idunico" and stg_project.uf in ({",".join("'" + uf + "'" for uf in ufs)});\n'''
+    return sql_full
 
 def generate_url(url_base, endpoint, parameters):
     url = url_base + endpoint
@@ -341,6 +350,14 @@ def extract_json_projeto_investimento_date(dates):
     df.unpersist()
 
 
+@task()
+def create_array(elements):
+    arr = []
+    for elemnt in elements:
+        arr.append(elemnt)
+    return arr
+
+
 @task(max_active_tis_per_dag=1)
 def delete_stg_projeto_investimento(date, days):
     user_dw = os.getenv('USER_DW')
@@ -365,6 +382,27 @@ def delete_stg_projeto_investimento(date, days):
                  delete from stg_projeto_investimento_fontes_de_recurso where "datacadastro" between '{date_before}' and '{date}';
                  delete from stg_projeto_investimento               where "datacadastro" between '{date_before}' and '{date}';''')
 
+@task(max_active_tis_per_dag=1)
+def delete_stg_projeto_investimento_uf(ufs):
+    user_dw = os.getenv('USER_DW')
+    password_dw = os.getenv('PASSWORD_DW')
+    host_dw = os.getenv('HOST_DW')
+    database_dw = os.getenv('DATABASE_DW')
+    port_dw = os.getenv('PORT_DW')
+    driver = os.getenv('DRIVER_JDBC_POSTGRES')
+    path_jdbc = os.getenv('PATH_JDBC_POSTGRES')
+    url = f'jdbc:postgresql://{host_dw}:{port_dw}/{database_dw}'
+    tables = ['stg_projeto_investimento_eixos', 'stg_projeto_investimento_tomadores', 'stg_projeto_investimento_executores',
+            'stg_projeto_investimento_repassadores', 'stg_projeto_investimento_tipos', 'stg_projeto_investimento_sub_tipos',
+            'stg_projeto_investimento_geometria', 'stg_projeto_investimento_fontes_de_recurso']
+
+    sql = generate_sql_deletion_ufs(tables, ufs)
+    sql += f'delete from stg_projeto_investimento where uf in ({",".join("'" + uf + "'"  for uf in ufs)});\n'
+
+    conn = jaydebeapi.connect(driver, url, [user_dw, password_dw], path_jdbc)
+    curs = conn.cursor()
+    curs.execute(sql)
+
 
 @task_group()
 def extract_execucao_financeira(url_base, endpoint, initial_year, final_year, page_size, errors_limit, errors_consecutives_limit, executions_limit):
@@ -387,6 +425,18 @@ def extract_projeto_investimento(url_base, endpoint, days, page_size, errors_lim
     extract_api >> extract_json
     del_stgs >> extract_json
 
+@task_group()
+def extract_projeto_investimento_uf(url_base, endpoint, ufs, page_size, errors_limit, errors_consecutives_limit, executions_limit):
+
+    ufs_array = create_array(ufs)
+    extract_api = extract_data_api_project.partial(url_base=url_base, endpoint=endpoint, page_size=page_size,
+                             errors_limit = errors_limit, errors_consecutives_limit = errors_consecutives_limit, executions_limit = executions_limit).expand(uf=ufs_array)
+    del_stgs = delete_stg_projeto_investimento_uf(ufs)
+    #extract_json = extract_json_projeto_investimento_date(dates)
+
+    #extract_api >> extract_json
+    #del_stgs >> extract_json
+
     
 
 @dag(
@@ -404,4 +454,16 @@ def get_api_data(initial_year, final_year, days, page_size, errors_limit, errors
     extract_exec_fin = extract_execucao_financeira(url_base, '/obrasgov/api/execucao-financeira', initial_year, final_year, page_size, errors_limit, errors_consecutives_limit, executions_limit)
     extract_projct_invest = extract_projeto_investimento(url_base, '/obrasgov/api/projeto-investimento', days, page_size, errors_limit, errors_consecutives_limit, executions_limit)
 
+@dag(
+    schedule = '@daily',
+    start_date = datetime.now(),
+    catchup = False,
+) 
+def dag_get_projeto_investimento_uf(ufs, page_size, errors_limit, errors_consecutives_limit, executions_limit):
+    url_base = os.getenv('URL_BASE')
+
+    extract_projct_invest = extract_projeto_investimento_uf(url_base, '/obrasgov/api/projeto-investimento', ufs, page_size, errors_limit, errors_consecutives_limit, executions_limit)
+
+
 dag = get_api_data(initial_year, final_year, days, page_size, errors_limit, errors_consecutives_limit, executions_limit)
+dag_investimento_uf = dag_get_projeto_investimento_uf(ufs, page_size, errors_limit, errors_consecutives_limit, executions_limit)
