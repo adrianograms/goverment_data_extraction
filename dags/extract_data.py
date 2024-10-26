@@ -13,6 +13,9 @@ import os.path
 import jaydebeapi
 import os
 from dotenv import load_dotenv
+from functools import reduce
+import  psycopg2 
+from math import ceil
 
 load_dotenv()
 page_size = 100
@@ -160,6 +163,91 @@ def extract_api_execucao_financeira_year(url_base, endpoint, year, method, page_
         if response.status_code == 429:
             time.sleep(1)
         return success, None,  page, errors_consecutives, errors, executions, response.status_code
+    
+
+def values_to_update(df_old, df_new, key_columns, compare_columns):
+    """
+    Compared two dataframes and find the rows to update.
+
+    :param df_old: Old DataFrame
+    :param df_new: New DataFrame
+    :param key_columns: Join columns
+    :param compare_columns: Comparisson coluns
+    :return: Update DataFrame
+    """
+    # Criar a condição de join
+    join_condition = [col(f"new.{key}") == col(f"old.{key}") for key in key_columns]
+    
+    # Realizar o join
+    joined_df = df_new.alias("new").join(df_old.alias("old"), on=join_condition, how="inner")
+
+    # Filtrar as diferenças
+    filter_condition = [
+        (col(f"new.{column}") != col(f"old.{column}")) for column in compare_columns
+    ]
+
+    # Aplicar o filtro
+    differences = joined_df.filter(reduce(lambda a, b: a | b, filter_condition))
+    
+    return differences.select("new.*")
+
+def values_to_insert_delete(df1, df2, key_columns):
+    """
+    Compared two dataframes and find the rows to update.
+
+    :param df1: Secondary DataFrame
+    :param df2: Main DataFrame
+    :param key_columns: Join columns
+    :return: Insert Or Delete DataFrame
+    """
+    # Criar a condição de join
+    join_condition = [col(f"new.{key}") == col(f"old.{key}") for key in key_columns]
+    
+    # Realizar o join
+    joined_df = df2.alias("new").join(df1.alias("old"), on=join_condition, how="leftanti")
+
+    return joined_df.select("new.*")
+
+def create_connection(connection_properties): 
+      #Connect to the Postgresql database using the psycopg2 adapter. 
+    #Pass your database name , username , password , hostname and port number 
+    conn = psycopg2.connect(f"dbname='{connection_properties['db_name']}' user='{connection_properties['user']}' password='{connection_properties['password']}'\
+                            host='{connection_properties['host']}' port='{connection_properties['port']}'") 
+    #Get the cursor object from the connection object 
+    curr = conn.cursor() 
+    return conn,curr 
+
+def insert_values(table_name, df, bulk_size, connection_properties):
+    splits = ceil(df.count() / bulk_size)
+    conn, curr = create_connection(connection_properties)
+
+    columns = list(map(lambda x: '"' + x + '"',df.columns))
+    columns_str = ', '.join(columns)
+    placeholders = ', '.join(['%s'] * len(columns))
+    rdn_splits = [float(bulk_size)] * splits
+    print(rdn_splits)
+
+    splits_dfs = df.randomSplit(rdn_splits)
+
+
+    for split_index, split_df in enumerate(splits_dfs):
+
+        if split_df.count() == 0:
+            continue
+        
+        query = f"INSERT INTO {table_name}({columns_str}) VALUES({placeholders})"
+
+        rdd = split_df.rdd
+        data = rdd.map(tuple)
+        data = data.collect()
+
+        curr.executemany(query, data) 
+        conn.commit() 
+
+        split_df.unpersist()
+        print(split_index, split_df.count())
+
+    conn.close()
 
 @task()
 def extract_data_api(url_base, endpoint, year, page_size = 100, errors_limit = -1, errors_consecutives_limit = 5, executions_limit = 200):
@@ -229,7 +317,7 @@ def extract_data_json(year):
     df.write.jdbc(url=url, table='stg_execucao_financeira', mode=mode, properties=properties)
 
 @task(max_active_tis_per_dag=2)
-def extract_json_projeto_investimento_date(dates):
+def extract_json_projeto_investimento_date(dates, path):
     user_dw = os.getenv('USER_DW')
     password_dw = os.getenv('PASSWORD_DW')
     host_dw = os.getenv('HOST_DW')
@@ -237,7 +325,7 @@ def extract_json_projeto_investimento_date(dates):
     port_dw = os.getenv('PORT_DW')
     driver = os.getenv('DRIVER_JDBC_POSTGRES')
     path_jdbc = os.getenv('PATH_JDBC_POSTGRES')
-    origin = os.getenv('PATH_DEST_PROJETO_INVESTIMENTO_DATE')
+    origin = os.getenv(path)
     url = f'jdbc:postgresql://{host_dw}:{port_dw}/{database_dw}'
     mode = 'append'
     properties = {"user": user_dw, "password": password_dw, "driver": driver}
@@ -416,11 +504,12 @@ def extract_execucao_financeira(url_base, endpoint, initial_year, final_year, pa
 def extract_projeto_investimento(url_base, endpoint, days, page_size, errors_limit, errors_consecutives_limit, executions_limit):
     today = datetime.now()
     dates = generate_dates(today, days)
+    path = 'PATH_DEST_PROJETO_INVESTIMENTO_DATE'
 
     extract_api = extract_data_api_projecto_investimento_date.partial(url_base=url_base, endpoint=endpoint, page_size=page_size,
                              errors_limit = errors_limit, errors_consecutives_limit = errors_consecutives_limit, executions_limit = executions_limit).expand(date=dates)
     del_stgs = delete_stg_projeto_investimento(today, days)
-    extract_json = extract_json_projeto_investimento_date(dates)
+    extract_json = extract_json_projeto_investimento_date(dates,path)
 
     extract_api >> extract_json
     del_stgs >> extract_json
@@ -428,14 +517,17 @@ def extract_projeto_investimento(url_base, endpoint, days, page_size, errors_lim
 @task_group()
 def extract_projeto_investimento_uf(url_base, endpoint, ufs, page_size, errors_limit, errors_consecutives_limit, executions_limit):
 
+    path = 'PATH_DEST_PROJETO_INVESTIMENTO_UF'
+
     ufs_array = create_array(ufs)
     extract_api = extract_data_api_project.partial(url_base=url_base, endpoint=endpoint, page_size=page_size,
                              errors_limit = errors_limit, errors_consecutives_limit = errors_consecutives_limit, executions_limit = executions_limit).expand(uf=ufs_array)
     del_stgs = delete_stg_projeto_investimento_uf(ufs)
+    extract_json = extract_json_projeto_investimento_date(ufs_array,path)
     #extract_json = extract_json_projeto_investimento_date(dates)
 
-    #extract_api >> extract_json
-    #del_stgs >> extract_json
+    extract_api >> extract_json
+    del_stgs >> extract_json
 
     
 
