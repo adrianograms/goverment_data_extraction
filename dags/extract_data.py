@@ -347,11 +347,48 @@ def crud_dimensions(bulk_size):
         .config("spark.driver.extraClassPath", path_jdbc)\
         .getOrCreate()
 
-    sql_new_eixos = 'select distinct id as nk_eixos, descricao from stg_projeto_investimento_eixos'
-    sql_old_eixos = 'select nk_eixos, descricao from dim_eixos de'
-    table_name_eixos = 'public.dim_eixos'
-    key_columns_eixos = ['nk_eixos']
+    sql_new_eixos = 'select distinct id as nk_eixo, descricao from stg_projeto_investimento_eixos'
+    sql_old_eixos = 'select nk_eixo, descricao from dim_eixo de'
+    table_name_eixos = 'public.dim_eixo'
+    key_columns_eixos = ['nk_eixo']
     crud_database_table(spark, sql_old_eixos, sql_new_eixos, table_name_eixos, key_columns_eixos, connection_properties, bulk_size)
+
+    sql_new_executores = 'select distinct codigo as nk_executor, nome as descricao from stg_projeto_investimento_executores'
+    sql_old_executores = 'select nk_executor, descricao from dim_executor'
+    table_name_executores = 'public.dim_executor'
+    key_columns_executores = ['nk_executor']
+    crud_database_table(spark, sql_old_executores, sql_new_executores, table_name_executores, key_columns_executores, connection_properties, bulk_size)
+
+    sql_new_fonte_recurso = 'select distinct UPPER(origem) as nk_fonte_recurso, origem as descricao from stg_projeto_investimento_fontes_de_recurso'
+    sql_old_fonte_recurso = 'select nk_fonte_recurso, descricao from dim_fonte_recurso'
+    table_name_fonte_recurso = 'public.dim_fonte_recurso'
+    key_columns_fonte_recurso = ['nk_fonte_recurso']
+    crud_database_table(spark, sql_old_fonte_recurso, sql_new_fonte_recurso, table_name_fonte_recurso, key_columns_fonte_recurso, connection_properties, bulk_size)
+
+    sql_new_repassador = 'select distinct codigo as nk_repassador, nome as descricao from stg_projeto_investimento_repassadores'
+    sql_old_repassador = 'select nk_repassador, descricao from dim_repassador'
+    table_name_repassador = 'public.dim_repassador'
+    key_columns_repassador = ['nk_repassador']
+    crud_database_table(spark, sql_old_repassador, sql_new_repassador, table_name_repassador, key_columns_repassador, connection_properties, bulk_size)
+
+    sql_new_sub_tipo = 'select distinct id as nk_sub_tipo, descricao from stg_projeto_investimento_sub_tipos'
+    sql_old_sub_tipo = 'select nk_sub_tipo, descricao from dim_sub_tipo'
+    table_name_sub_tipo = 'public.dim_sub_tipo'
+    key_columns_sub_tipo = ['nk_sub_tipo']
+    crud_database_table(spark, sql_old_sub_tipo, sql_new_sub_tipo, table_name_sub_tipo, key_columns_sub_tipo, connection_properties, bulk_size)
+
+    sql_new_tipo = 'select distinct id as nk_tipo, descricao from stg_projeto_investimento_tipos'
+    sql_old_tipo = 'select nk_tipo, descricao from dim_tipo'
+    table_name_tipo = 'public.dim_tipo'
+    key_columns_tipo = ['nk_tipo']
+    crud_database_table(spark, sql_old_tipo, sql_new_tipo, table_name_tipo, key_columns_tipo, connection_properties, bulk_size)
+
+    sql_new_tomador = 'select distinct codigo as nk_tomador, nome as descricao from stg_projeto_investimento_tomadores'
+    sql_old_tomador = 'select nk_tomador, descricao from dim_tomador'
+    table_name_tomador = 'public.dim_tomador'
+    key_columns_tomador = ['nk_tomador']
+    crud_database_table(spark, sql_old_tomador, sql_new_tomador, table_name_tomador, key_columns_tomador, connection_properties, bulk_size)
+
 
 @task()
 def extract_data_api(url_base, endpoint, year, page_size = 100, errors_limit = -1, errors_consecutives_limit = 5, executions_limit = 200):
@@ -636,7 +673,7 @@ def extract_projeto_investimento_uf(url_base, endpoint, ufs, page_size, errors_l
     
 
 @dag(
-    schedule = '@daily',
+    schedule = None,
     start_date = datetime.now(),
     catchup = False,
     params={
@@ -655,7 +692,7 @@ def get_api_data(initial_year, final_year, days, page_size, errors_limit, errors
     extract_projct_invest >> crud_dim
 
 @dag(
-    schedule = '@daily',
+    schedule = None,
     start_date = datetime.now(),
     catchup = False,
 ) 
