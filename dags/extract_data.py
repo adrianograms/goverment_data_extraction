@@ -329,6 +329,51 @@ def crud_database_table(spark, sql_old, sql_new, table_name, key_columns, connec
     df_new.unpersist()
     df_old.unpersist()
 
+def sql_delete_duplicates(table_name, key_columns):
+    select_key_columns = ' , '.join(key_columns)
+    comparison_keys_columns = [f'a.{key_column} = b.{key_column}' for key_column in key_columns]
+    where_key_columns = '\nAND '.join(comparison_keys_columns)
+    sql = f'''DELETE FROM {table_name} a USING (
+                SELECT MIN(ctid) as ctid, {select_key_columns}
+                FROM {table_name} 
+                GROUP BY ({select_key_columns}) HAVING COUNT(*) > 1
+            ) b
+            WHERE {where_key_columns}
+            AND a.ctid <> b.ctid'''
+    return sql
+
+def delete_duplicates(table_name, key_columns, connection_properties):
+    conn, curr = create_connection(connection_properties)
+    sql_delete = sql_delete_duplicates(table_name, key_columns)
+
+    curr.execute(sql_delete)
+
+    conn.commit()
+    conn.close()
+
+@task()
+def delete_duplicates_stg():
+    user_dw = os.getenv('USER_DW')
+    password_dw = os.getenv('PASSWORD_DW')
+    host_dw = os.getenv('HOST_DW')
+    database_dw = os.getenv('DATABASE_DW')
+    port_dw = os.getenv('PORT_DW')
+    driver = os.getenv('DRIVER_JDBC_POSTGRES')
+    path_jdbc = os.getenv('PATH_JDBC_POSTGRES')
+
+    connection_properties = {'db_name':database_dw, 'user':user_dw, 'password':password_dw, 'host':host_dw, 'port':port_dw, 'driver': driver}
+    tables_key_columns = [('stg_projeto_investimento_eixos', ['idunico','id']),
+                          ('stg_projeto_investimento_executores', ['idunico', 'codigo']),
+                          ('stg_projeto_investimento_fontes_de_recurso', ['idunico', 'origem', 'valorinvestimentoprevisto']),
+                          ('stg_projeto_investimento_repassadores', ['idunico', 'codigo']),
+                          ('stg_projeto_investimento_sub_tipos', ['idunico', 'id']),
+                          ('stg_projeto_investimento_tipos', ['idunico', 'id']),
+                          ('stg_projeto_investimento_tomadores', ['idunico', 'codigo']),
+                          ('stg_projeto_investimento', ['idunico'])]
+    for table_name, key_columns in tables_key_columns:
+        print(f'Deleting duplicates on table {table_name}...')
+        delete_duplicates(table_name, key_columns, connection_properties)
+
 @task()
 def crud_dimensions(bulk_size):
     user_dw = os.getenv('USER_DW')
@@ -687,9 +732,11 @@ def get_api_data(initial_year, final_year, days, page_size, errors_limit, errors
     extract_exec_fin = extract_execucao_financeira(url_base, '/obrasgov/api/execucao-financeira', initial_year, final_year, page_size, errors_limit, errors_consecutives_limit, executions_limit)
     extract_projct_invest = extract_projeto_investimento(url_base, '/obrasgov/api/projeto-investimento', days, page_size, errors_limit, errors_consecutives_limit, executions_limit)
     crud_dim = crud_dimensions(500)
+    del_dup_stg = delete_duplicates_stg()
 
     extract_exec_fin >> crud_dim
     extract_projct_invest >> crud_dim
+    crud_dim >> del_dup_stg
 
 @dag(
     schedule = None,
