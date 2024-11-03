@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from airflow.decorators import dag, task, task_group
 from airflow.models.param import Param
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import input_file_name, substring, explode, to_date, col
+from pyspark.sql.functions import input_file_name, substring, explode, to_date, col, regexp_replace
 from pyspark.sql.types import ArrayType
 import os.path 
 import jaydebeapi
@@ -282,6 +282,7 @@ def bulk_values(table_name, df, bulk_size, connection_properties, type, columns,
 def crud_database(df_old, df_new, table_name, key_columns, connection_properties, bulk_size, insert = True, update = True, delete = False):
     columns_comparisson = df_new.columns
     columns_comparisson = [column for column in columns_comparisson if not column in key_columns] 
+    print(f'CRUD starting for table {table_name}')
 
     if delete == True:
         df_delete = values_to_insert_delete(df_new, df_old, key_columns)
@@ -351,6 +352,46 @@ def delete_duplicates(table_name, key_columns, connection_properties):
     conn.commit()
     conn.close()
 
+def delete_duplicates_distinct_years(table_name, years, connection_properties):
+    conn, curr = create_connection(connection_properties)
+
+    curr.execute(f'''create table IF NOT EXISTS {table_name}_temp (like {table_name})''')
+    conn.commit()
+
+    curr.execute(f'''INSERT INTO {table_name}_temp SELECT DISTINCT * FROM {table_name} where cast("nomeArquivo" as integer) in ({','.join(years)})''')
+    conn.commit()
+
+    curr.execute(f'''delete from {table_name} where cast("nomeArquivo" as integer) in ({','.join(years)})''')
+    conn.commit()
+
+    curr.execute(f'''insert into {table_name} select * from {table_name}_temp''')
+    conn.commit()
+
+    curr.execute(f'''drop table {table_name}_temp''')
+    conn.commit()
+
+    conn.close()
+
+def delete_duplicates_distinct(table_name, connection_properties):
+    conn, curr = create_connection(connection_properties)
+
+    curr.execute(f'''create table IF NOT EXISTS {table_name}_temp (like {table_name})''')
+    conn.commit()
+
+    curr.execute(f'''INSERT INTO {table_name}_temp SELECT DISTINCT * FROM {table_name}''')
+    conn.commit()
+
+    curr.execute(f'''delete from {table_name}''')
+    conn.commit()
+
+    curr.execute(f'''insert into {table_name} select * from {table_name}_temp''')
+    conn.commit()
+
+    curr.execute(f'''drop table {table_name}_temp''')
+    conn.commit()
+
+    conn.close()
+
 @task()
 def delete_duplicates_stg():
     user_dw = os.getenv('USER_DW')
@@ -373,6 +414,11 @@ def delete_duplicates_stg():
     for table_name, key_columns in tables_key_columns:
         print(f'Deleting duplicates on table {table_name}...')
         delete_duplicates(table_name, key_columns, connection_properties)
+
+    tables_distinct_delete = ['stg_execucao_financeira']
+    for table_name in tables_distinct_delete:
+        print(f'Deleting duplicates on table {table_name} using distinct...')
+        delete_duplicates_distinct(table_name,connection_properties)
 
 @task()
 def crud_dimensions(bulk_size):
@@ -490,7 +536,7 @@ def extract_data_json(year):
     origin_file = origin + '/' + str(year)+ '.json'
     if os.path.isfile(origin_file) == True:
         df = spark.read.json(origin_file)
-        df = df.withColumn('nomeArquivo',substring(input_file_name(),-9,4))
+        df = df.withColumn('nomeArquivo',regexp_replace(input_file_name(), '.*\/|\.json$', ''))
     else:
         raise Exception("File dosen't exist!")
 
@@ -532,7 +578,7 @@ def extract_json_projeto_investimento_date(dates, path):
         return
     
     df = spark.read.json(origin_file)
-    df = df.withColumn('nomeArquivo',substring(input_file_name(),-9,4))
+    df = df.withColumn('nomeArquivo',regexp_replace(input_file_name(), '.*\/|\.json$', ''))
 
     if df.count() == 0:
         return
