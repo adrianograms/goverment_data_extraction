@@ -480,6 +480,20 @@ def crud_dimensions(bulk_size):
     key_columns_tomador = ['nk_tomador']
     crud_database_table(spark, sql_old_tomador, sql_new_tomador, table_name_tomador, key_columns_tomador, connection_properties, bulk_size)
 
+    sql_new_uf = 'select distinct upper(uf) as nk_uf, uf as descricao from stg_projeto_investimento '
+    sql_old_uf = 'select nk_uf, descricao from dim_uf'
+    table_name_uf = 'public.dim_uf'
+    key_columns_uf = ['nk_uf']
+    crud_database_table(spark, sql_old_uf, sql_new_uf, table_name_uf, key_columns_uf, connection_properties, bulk_size)
+
+    sql_new_situacao = 'select distinct upper(situacao) as nk_situacao, situacao as descricao from stg_projeto_investimento'
+    sql_old_situacao = 'select nk_situacao, descricao from dim_situacao ds'
+    table_name_situacao = 'public.dim_situacao'
+    key_columns_situacao = ['nk_situacao']
+    crud_database_table(spark, sql_old_situacao, sql_new_situacao, table_name_situacao, key_columns_situacao, connection_properties, bulk_size)
+
+
+
 
 @task()
 def extract_data_api(url_base, endpoint, year, page_size = 100, errors_limit = -1, errors_consecutives_limit = 5, executions_limit = 200):
@@ -577,7 +591,7 @@ def extract_json_projeto_investimento_date(dates, path):
     if len(origins) == 0:
         return
     
-    df = spark.read.json(origin_file)
+    df = spark.read.json(origins)
     df = df.withColumn('nomeArquivo',regexp_replace(input_file_name(), '.*\/|\.json$', ''))
 
     if df.count() == 0:
