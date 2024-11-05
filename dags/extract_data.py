@@ -492,6 +492,18 @@ def crud_dimensions(bulk_size):
     key_columns_situacao = ['nk_situacao']
     crud_database_table(spark, sql_old_situacao, sql_new_situacao, table_name_situacao, key_columns_situacao, connection_properties, bulk_size)
 
+    sql_new_natureza = 'select distinct upper(natureza) as nk_natureza, natureza as descricao from stg_projeto_investimento'
+    sql_old_natureza = 'select nk_natureza, descricao from dim_natureza dn '
+    table_name_natureza = 'public.dim_natureza'
+    key_columns_natureza = ['nk_natureza']
+    crud_database_table(spark, sql_old_natureza, sql_new_natureza, table_name_natureza, key_columns_natureza, connection_properties, bulk_size)
+
+    sql_new_especie = 'select distinct upper(especie) as nk_especie, especie as descricao from stg_projeto_investimento' 
+    sql_old_especie = 'select nk_especie, descricao from dim_especie de '
+    table_name_especie = 'public.dim_especie'
+    key_columns_especie = ['nk_especie']
+    crud_database_table(spark, sql_old_especie, sql_new_especie, table_name_especie, key_columns_especie, connection_properties, bulk_size)
+
 
 
 
