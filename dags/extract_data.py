@@ -85,11 +85,11 @@ def extract_api(url_base, endpoint, param, method, path_dest_env, fun_api, page_
         print('Execution Finished with success!')
     else:
         print('Execution Finished with error!')
-        if errors_consecutives < errors_consecutives_limit:
+        if errors_consecutives > errors_consecutives_limit:
             raise Exception("Number of consecutives errors exceeded")
-        elif errors < errors_limit:
+        elif errors > errors_limit:
             raise Exception("Number of total errors exceeded")
-        elif executions < executions_limit:
+        elif executions > executions_limit:
             raise Exception("Number of executions exceeded")
 
     with open(dest_path_file, 'w', encoding='utf-8') as f:
@@ -504,6 +504,46 @@ def crud_dimensions(bulk_size):
     key_columns_especie = ['nk_especie']
     crud_database_table(spark, sql_old_especie, sql_new_especie, table_name_especie, key_columns_especie, connection_properties, bulk_size)
 
+    sql_new_projeto_investimento = '''select distinct 
+                                            idunico as nk_projeto_investimento,
+                                            datacadastro as data_projeto,
+                                            nome as nome_projeto,
+                                            cep,
+                                            endereco,
+                                            descricao as descricao_projeto,
+                                            funcaosocial as funcao_social,
+                                            metaglobal as meta_global,
+                                            datainicialprevista as data_inicial_prevista,
+                                            datafinalprevista as data_final_prevista,
+                                            datainicialefetiva as data_inicial_efetiva,
+                                            datafinalefetiva as data_final_efetiva,
+                                            especie,
+                                            natureza,
+                                            naturezaoutras as natureza_outras,
+                                            situacao
+                                        from stg_projeto_investimento spi''' 
+    sql_old_projeto_investimento = '''select 
+                                        nk_projeto_investimento,
+                                        data_projeto,
+                                        nome_projeto,
+                                        cep,
+                                        endereco,
+                                        descricao_projeto,
+                                        funcao_social,
+                                        meta_global,
+                                        data_inicial_prevista,
+                                        data_final_prevista,
+                                        data_inicial_efetiva,
+                                        data_final_efetiva,
+                                        especie,
+                                        natureza,
+                                        natureza_outras,
+                                        situacao
+                                    from dim_projeto_investimento'''
+    table_name_projeto_investimento = 'public.dim_projeto_investimento'
+    key_columns_projeto_investimento = ['nk_projeto_investimento']
+    crud_database_table(spark, sql_old_projeto_investimento, sql_new_projeto_investimento, table_name_projeto_investimento, key_columns_projeto_investimento, connection_properties, bulk_size)
+
 @task()
 def crud_facts(bulk_size):
     user_dw = os.getenv('USER_DW')
@@ -522,55 +562,41 @@ def crud_facts(bulk_size):
         .config("spark.driver.extraClassPath", path_jdbc)\
         .getOrCreate()
 
-    sql_new_project_inv =     '''with execucao_financeira as (
-                            select 
-                                sef."idProjetoInvestimento" as idunico, 
-                                sum(sef."valorEmpenho") 	as valor_execucao
-                            from stg_execucao_financeira sef
-                            group by 1
-                        )
-                        select 
-                                stg.idunico as nk_projeto,
-                                datacadastro as data_projeto,
-                                nome as projeto,
-                                datainicialprevista as data_inicio_prevista,
-                                datafinalprevista as data_final_prevista,
-                                datafinalprevista - datainicialprevista as prazo_previsto,
-                                datainicialefetiva as data_inicial_efetiva,
-                                datafinalefetiva  as data_final_efetiva,
-                                datafinalefetiva - datainicialefetiva as prazo_efetivo,
-                                de.sk_especie,
-                                dn.sk_natureza,
-                                ds.sk_situacao,
-                                du.sk_uf,
-                                stg.qdtempregosgerados as qtd_empregos_gerados,
-                                stg.populacaobeneficiada as pop_beneficiada,
-                                ef.valor_execucao
-                        from stg_projeto_investimento stg 
-                        inner join dim_especie de on de.nk_especie = UPPER(stg.especie)
-                        inner join dim_natureza dn on dn.nk_natureza = upper(STG.natureza)
-                        inner join dim_situacao ds on ds.nk_situacao = upper(stg.situacao)
-                        inner join dim_uf du on du.nk_uf = upper(stg.uf)
-                        left join execucao_financeira ef on ef.idunico = stg.idunico'''
-    sql_old_project_inv =     '''SELECT nk_projeto, 
-                                data_projeto, 
-                                projeto, 
-                                data_inicio_prevista, 
-                                data_final_prevista, 
-                                prazo_previsto, 
-                                data_inicial_efetiva, 
-                                data_final_efetiva, 
-                                prazo_efetivo, 
-                                sk_especie, 
-                                sk_natureza, 
-                                sk_situacao, 
-                                sk_uf, 
-                                qtd_empregos_gerados, 
-                                pop_beneficiada, 
-                                valor_execucao
-                            FROM public.fact_projeto_investimento'''
+    sql_new_project_inv =     '''WITH INVESTIMENTO_PREVISTO AS (
+                                    SELECT 	IDUNICO,
+                                            SUM(STG.VALORINVESTIMENTOPREVISTO) AS VALOR_INVESTIMENTO_PREVISTO
+                                    FROM STG_PROJETO_INVESTIMENTO_FONTES_DE_RECURSO STG 
+                                    GROUP BY 1
+                                ),
+                                EXECUCAO_FINANCEIRA AS (
+                                    SELECT 
+                                            STG."idProjetoInvestimento" AS IDUNICO,
+                                            SUM(STG."valorEmpenho") AS VALOR_EXECUCAO
+                                    FROM STG_EXECUCAO_FINANCEIRA STG
+                                    GROUP BY 1
+                                )
+                                SELECT 
+                                        DPI.SK_PROJETO_INVESTIMENTO,
+                                        STG.DATAFINALPREVISTA - STG.DATAINICIALPREVISTA AS PRAZO_PREVISTO,
+                                        STG.DATAFINALEFETIVA - STG.DATAINICIALEFETIVA AS PRAZO_EFETIVO,
+                                        STG.QDTEMPREGOSGERADOS AS QTD_EMPREGOS_GERADOS,
+                                        STG.POPULACAOBENEFICIADA  AS POP_BENEFICIADA,
+                                        IP.VALOR_INVESTIMENTO_PREVISTO,
+                                        COALESCE(EF.VALOR_EXECUCAO,0) AS VALOR_EXECUCAO
+                                FROM STG_PROJETO_INVESTIMENTO STG
+                                INNER JOIN DIM_PROJETO_INVESTIMENTO 	DPI ON DPI.NK_PROJETO_INVESTIMENTO = STG.IDUNICO
+                                LEFT JOIN INVESTIMENTO_PREVISTO 		IP  ON IP.IDUNICO = STG.IDUNICO
+                                LEFT JOIN EXECUCAO_FINANCEIRA 			EF  ON EF.IDUNICO = STG.IDUNICO'''
+    sql_old_project_inv =     '''SELECT sk_projeto_investimento, 
+                                        prazo_previsto, 
+                                        prazo_efetivo, 
+                                        qtd_empregos_gerados, 
+                                        pop_beneficiada, 
+                                        valor_investimento_previsto, 
+                                        valor_execucao
+                                FROM public.fact_projeto_investimento'''
     table_name_project_inv = 'public.fact_projeto_investimento'
-    key_columns_project_inv  = ['nk_projeto']
+    key_columns_project_inv  = ['sk_projeto_investimento']
     crud_database_table(spark, sql_old_project_inv, sql_new_project_inv, table_name_project_inv, key_columns_project_inv, connection_properties, bulk_size)
 
 
@@ -590,7 +616,7 @@ def extract_data_api_project(url_base, endpoint, uf, page_size = 100, errors_lim
     path_dest_env = "PATH_DEST_PROJETO_INVESTIMENTO_UF"
     extract_api(url_base, endpoint, uf, method, path_dest_env, extract_api_projeto_investimento_uf, page_size, errors_limit, errors_consecutives_limit, executions_limit)
 
-@task(max_active_tis_per_dag=10)
+@task(max_active_tis_per_dag=2)
 def extract_data_api_projecto_investimento_date(url_base, endpoint, date, page_size = 100, errors_limit = -1, errors_consecutives_limit = 5, executions_limit = 200):
     method = "GET"
     path_dest_env = "PATH_DEST_PROJETO_INVESTIMENTO_DATE"
@@ -629,7 +655,7 @@ def extract_data_json(year):
         .builder\
         .appName("Extraction_Data")\
         .config("spark.driver.extraClassPath", path_jdbc)\
-        .getOrCreate()
+        .getOrCreate() 
     origin_file = origin + '/' + str(year)+ '.json'
     if os.path.isfile(origin_file) == True:
         df = spark.read.json(origin_file)
@@ -844,6 +870,13 @@ def extract_projeto_investimento(url_base, endpoint, days, page_size, errors_lim
     del_stgs >> extract_json
 
 @task_group()
+def crud_projeto_investimento(bulk_size):
+    crud_dim = crud_dimensions(bulk_size)
+    del_dup_stg = delete_duplicates_stg()
+    crud_fac = crud_facts(bulk_size)
+    del_dup_stg >> crud_dim >> crud_fac
+
+@task_group()
 def extract_projeto_investimento_uf(url_base, endpoint, ufs, page_size, errors_limit, errors_consecutives_limit, executions_limit):
 
     path = 'PATH_DEST_PROJETO_INVESTIMENTO_UF'
@@ -871,16 +904,14 @@ def extract_projeto_investimento_uf(url_base, endpoint, ufs, page_size, errors_l
 ) 
 def get_api_data(initial_year, final_year, days, page_size, errors_limit, errors_consecutives_limit, executions_limit):
     url_base = os.getenv('URL_BASE')
+    bulk_size = int(os.getenv('BULK_SIZE'))
     
     extract_exec_fin = extract_execucao_financeira(url_base, '/obrasgov/api/execucao-financeira', initial_year, final_year, page_size, errors_limit, errors_consecutives_limit, executions_limit)
     extract_projct_invest = extract_projeto_investimento(url_base, '/obrasgov/api/projeto-investimento', days, page_size, errors_limit, errors_consecutives_limit, executions_limit)
-    crud_dim = crud_dimensions(500)
-    del_dup_stg = delete_duplicates_stg()
-    crud_fac = crud_facts(500)
+    crud_project = crud_projeto_investimento(bulk_size)
 
-    extract_exec_fin >> crud_dim
-    extract_projct_invest >> crud_dim
-    crud_dim >> del_dup_stg >> crud_fac
+    extract_exec_fin >> crud_project
+    extract_projct_invest >> crud_project
 
 @dag(
     schedule = None,
