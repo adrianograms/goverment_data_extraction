@@ -579,14 +579,14 @@ def crud_facts(bulk_size):
                                         DPI.SK_PROJETO_INVESTIMENTO,
                                         STG.DATAFINALPREVISTA - STG.DATAINICIALPREVISTA AS PRAZO_PREVISTO,
                                         STG.DATAFINALEFETIVA - STG.DATAINICIALEFETIVA AS PRAZO_EFETIVO,
-                                        STG.QDTEMPREGOSGERADOS AS QTD_EMPREGOS_GERADOS,
-                                        STG.POPULACAOBENEFICIADA  AS POP_BENEFICIADA,
+                                        CAST(NULLIF(STG.QDTEMPREGOSGERADOS, '') AS INTEGER) AS QTD_EMPREGOS_GERADOS,
+                                        CAST(NULLIF(STG.POPULACAOBENEFICIADA, '') AS INTEGER)  AS POP_BENEFICIADA,
                                         IP.VALOR_INVESTIMENTO_PREVISTO,
                                         COALESCE(EF.VALOR_EXECUCAO,0) AS VALOR_EXECUCAO
                                 FROM STG_PROJETO_INVESTIMENTO STG
                                 INNER JOIN DIM_PROJETO_INVESTIMENTO 	DPI ON DPI.NK_PROJETO_INVESTIMENTO = STG.IDUNICO
                                 LEFT JOIN INVESTIMENTO_PREVISTO 		IP  ON IP.IDUNICO = STG.IDUNICO
-                                LEFT JOIN EXECUCAO_FINANCEIRA 			EF  ON EF.IDUNICO = STG.IDUNICO'''
+                                LEFT JOIN EXECUCAO_FINANCEIRA 			EF  ON EF.IDUNICO = STG.IDUNICO '''
     sql_old_project_inv =     '''SELECT sk_projeto_investimento, 
                                         prazo_previsto, 
                                         prazo_efetivo, 
@@ -598,6 +598,23 @@ def crud_facts(bulk_size):
     table_name_project_inv = 'public.fact_projeto_investimento'
     key_columns_project_inv  = ['sk_projeto_investimento']
     crud_database_table(spark, sql_old_project_inv, sql_new_project_inv, table_name_project_inv, key_columns_project_inv, connection_properties, bulk_size)
+
+    sql_new_project_inv_font_rec =     '''SELECT 
+                                                DPI.SK_PROJETO_INVESTIMENTO,
+                                                DFR.SK_FONTE_RECURSO,
+                                                FR.VALORINVESTIMENTOPREVISTO AS VALOR_INVESTIMENTO_PREVISTO
+                                        FROM STG_PROJETO_INVESTIMENTO STG
+                                        INNER JOIN DIM_PROJETO_INVESTIMENTO 	DPI ON DPI.NK_PROJETO_INVESTIMENTO = STG.IDUNICO
+                                        INNER JOIN STG_PROJETO_INVESTIMENTO_FONTES_DE_RECURSO FR ON FR.IDUNICO = STG.IDUNICO 
+                                        INNER JOIN DIM_FONTE_RECURSO            DFR ON DFR.NK_FONTE_RECURSO = UPPER(FR.ORIGEM)'''
+    sql_old_project__inv_font_rec =     '''SELECT 
+                                                    SK_PROJETO_INVESTIMENTO,
+                                                    SK_FONTE_RECURSO,
+                                                    VALOR_INVESTIMENTO_PREVISTO
+                                            FROM FACT_PROJETO_INVESTIMENTO_FONTE_RECURSO FACT '''
+    table_name_project_inv_font_rec = 'public.FACT_PROJETO_INVESTIMENTO_FONTE_RECURSO'
+    key_columns_project_inv_font_rec  = ['sk_projeto_investimento', 'sk_fonte_recurso']
+    crud_database_table(spark, sql_old_project__inv_font_rec, sql_new_project_inv_font_rec, table_name_project_inv_font_rec, key_columns_project_inv_font_rec, connection_properties, bulk_size)
 
 
 
