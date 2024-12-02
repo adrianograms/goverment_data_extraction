@@ -562,6 +562,7 @@ def crud_facts(bulk_size):
         .config("spark.driver.extraClassPath", path_jdbc)\
         .getOrCreate()
 
+    # CRUD fact_projeto_investimento
     sql_new_project_inv =     '''WITH INVESTIMENTO_PREVISTO AS (
                                     SELECT 	IDUNICO,
                                             SUM(STG.VALORINVESTIMENTOPREVISTO) AS VALOR_INVESTIMENTO_PREVISTO
@@ -599,6 +600,7 @@ def crud_facts(bulk_size):
     key_columns_project_inv  = ['sk_projeto_investimento']
     crud_database_table(spark, sql_old_project_inv, sql_new_project_inv, table_name_project_inv, key_columns_project_inv, connection_properties, bulk_size)
 
+    # CRUD fact_projeto_investimento_fonte_recurso
     sql_new_project_inv_font_rec =     '''SELECT 
                                                 DPI.SK_PROJETO_INVESTIMENTO,
                                                 DFR.SK_FONTE_RECURSO,
@@ -607,14 +609,104 @@ def crud_facts(bulk_size):
                                         INNER JOIN DIM_PROJETO_INVESTIMENTO 	DPI ON DPI.NK_PROJETO_INVESTIMENTO = STG.IDUNICO
                                         INNER JOIN STG_PROJETO_INVESTIMENTO_FONTES_DE_RECURSO FR ON FR.IDUNICO = STG.IDUNICO 
                                         INNER JOIN DIM_FONTE_RECURSO            DFR ON DFR.NK_FONTE_RECURSO = UPPER(FR.ORIGEM)'''
-    sql_old_project__inv_font_rec =     '''SELECT 
+    sql_old_project_inv_font_rec =     '''SELECT 
                                                     SK_PROJETO_INVESTIMENTO,
                                                     SK_FONTE_RECURSO,
                                                     VALOR_INVESTIMENTO_PREVISTO
                                             FROM FACT_PROJETO_INVESTIMENTO_FONTE_RECURSO FACT '''
     table_name_project_inv_font_rec = 'public.FACT_PROJETO_INVESTIMENTO_FONTE_RECURSO'
     key_columns_project_inv_font_rec  = ['sk_projeto_investimento', 'sk_fonte_recurso']
-    crud_database_table(spark, sql_old_project__inv_font_rec, sql_new_project_inv_font_rec, table_name_project_inv_font_rec, key_columns_project_inv_font_rec, connection_properties, bulk_size)
+    crud_database_table(spark, sql_old_project_inv_font_rec, sql_new_project_inv_font_rec, table_name_project_inv_font_rec, key_columns_project_inv_font_rec, connection_properties, bulk_size)
+
+    # CRUD fact_projeto_investimento_eixos
+    sql_new_project_inv_eixos =     '''SELECT 	DISTINCT
+                                                DPI.SK_PROJETO_INVESTIMENTO,
+                                                DE.SK_EIXO
+                                        FROM STG_PROJETO_INVESTIMENTO_EIXOS STG
+                                        INNER JOIN DIM_EIXO DE ON DE.NK_EIXO = CAST(STG.ID AS VARCHAR)
+                                        INNER JOIN DIM_PROJETO_INVESTIMENTO DPI ON DPI.NK_PROJETO_INVESTIMENTO = STG.IDUNICO'''
+    sql_old_project_inv_eixos =     '''SELECT
+                                                FATO.SK_PROJETO_INVESTIMENTO,
+                                                FATO.SK_EIXO
+                                        FROM FACT_PROJETO_INVESTIMENTO_EIXOS FATO '''
+    table_name_project_inv_eixos = 'public.FACT_PROJETO_INVESTIMENTO_EIXOS'
+    key_columns_project_inv_eixos  = ['SK_PROJETO_INVESTIMENTO', 'SK_EIXO']
+    crud_database_table(spark, sql_old_project_inv_eixos, sql_new_project_inv_eixos, table_name_project_inv_eixos, key_columns_project_inv_eixos, connection_properties, bulk_size)
+
+    # CRUD fact_projeto_investimento_tomadores
+    sql_new_project_inv_tom =     '''SELECT 	DISTINCT
+                                            DPI.SK_PROJETO_INVESTIMENTO,
+                                            DT.SK_TOMADOR
+                                    FROM STG_PROJETO_INVESTIMENTO_TOMADORES STG
+                                    INNER JOIN DIM_TOMADOR DT ON DT.NK_TOMADOR = CAST(STG.CODIGO AS VARCHAR) 
+                                    INNER JOIN DIM_PROJETO_INVESTIMENTO DPI ON DPI.NK_PROJETO_INVESTIMENTO = STG.IDUNICO'''
+    sql_old_project_inv_tom =     '''SELECT 
+                                            SK_PROJETO_INVESTIMENTO,
+                                            SK_TOMADOR
+                                    FROM FACT_PROJETO_INVESTIMENTO_TOMADORES FATO '''
+    table_name_project_inv_tom = 'public.FACT_PROJETO_INVESTIMENTO_TOMADORES'
+    key_columns_project_inv_tom  = ['SK_PROJETO_INVESTIMENTO', 'SK_TOMADOR']
+    crud_database_table(spark, sql_old_project_inv_tom, sql_new_project_inv_tom, table_name_project_inv_tom, key_columns_project_inv_tom, connection_properties, bulk_size)
+
+    # CRUD fact_projeto_investimento_executores
+    sql_new_project_inv_exc =     '''SELECT 	DISTINCT
+                                            DPI.SK_PROJETO_INVESTIMENTO,
+                                            DE.SK_EXECUTOR 
+                                    FROM STG_PROJETO_INVESTIMENTO_EXECUTORES STG
+                                    INNER JOIN DIM_EXECUTOR DE ON DE.NK_EXECUTOR = CAST(STG.CODIGO AS VARCHAR) 
+                                    INNER JOIN DIM_PROJETO_INVESTIMENTO DPI ON DPI.NK_PROJETO_INVESTIMENTO = STG.IDUNICO'''
+    sql_old_project_inv_exc =     '''SELECT
+                                            SK_PROJETO_INVESTIMENTO,
+                                            SK_EXECUTOR 
+                                    FROM FACT_PROJETO_INVESTIMENTO_EXECUTORES FATO '''
+    table_name_project_inv_exc = 'public.FACT_PROJETO_INVESTIMENTO_EXECUTORES'
+    key_columns_project_inv_exc  = ['SK_PROJETO_INVESTIMENTO', 'SK_EXECUTOR']
+    crud_database_table(spark, sql_old_project_inv_exc, sql_new_project_inv_exc, table_name_project_inv_exc, key_columns_project_inv_exc, connection_properties, bulk_size)
+
+    # CRUD fact_projeto_investimento_repassadores
+    sql_new_project_inv_rep =     '''SELECT 	DISTINCT
+                                            DPI.SK_PROJETO_INVESTIMENTO,
+                                            DR.SK_REPASSADOR 
+                                    FROM STG_PROJETO_INVESTIMENTO_REPASSADORES STG
+                                    INNER JOIN DIM_REPASSADOR DR ON DR.NK_REPASSADOR = CAST(STG.CODIGO AS VARCHAR) 
+                                    INNER JOIN DIM_PROJETO_INVESTIMENTO DPI ON DPI.NK_PROJETO_INVESTIMENTO = STG.IDUNICO'''
+    sql_old_project_inv_rep =     '''SELECT 
+                                            SK_PROJETO_INVESTIMENTO,
+                                            SK_REPASSADOR 
+                                    FROM FACT_PROJETO_INVESTIMENTO_REPASSADORES FATO'''
+    table_name_project_inv_rep = 'public.FACT_PROJETO_INVESTIMENTO_REPASSADORES'
+    key_columns_project_inv_rep  = ['SK_PROJETO_INVESTIMENTO', 'SK_REPASSADOR']
+    crud_database_table(spark, sql_old_project_inv_rep, sql_new_project_inv_rep, table_name_project_inv_rep, key_columns_project_inv_rep, connection_properties, bulk_size)
+
+    # CRUD fact_projeto_investimento_tipos
+    sql_new_project_inv_tipos =     '''SELECT 	DISTINCT
+                                                DPI.SK_PROJETO_INVESTIMENTO,
+                                                DT.SK_TIPO
+                                        FROM STG_PROJETO_INVESTIMENTO_TIPOS STG
+                                        INNER JOIN DIM_TIPO DT ON DT.NK_TIPO = CAST(STG.ID AS VARCHAR) 
+                                        INNER JOIN DIM_PROJETO_INVESTIMENTO DPI ON DPI.NK_PROJETO_INVESTIMENTO = STG.IDUNICO'''
+    sql_old_project_inv_tipos =     '''SELECT 
+                                                SK_PROJETO_INVESTIMENTO,
+                                                SK_TIPO 
+                                        FROM FACT_PROJETO_INVESTIMENTO_TIPOS FACT'''
+    table_name_project_inv_tipos = 'public.FACT_PROJETO_INVESTIMENTO_TIPOS'
+    key_columns_project_inv_tipos  = ['SK_PROJETO_INVESTIMENTO', 'SK_TIPO']
+    crud_database_table(spark, sql_old_project_inv_tipos, sql_new_project_inv_tipos, table_name_project_inv_tipos, key_columns_project_inv_tipos, connection_properties, bulk_size)
+
+    # CRUD Fact_projeto_investimento_sub_tipos
+    sql_new_project_inv_sub_tipos =     '''SELECT 	DISTINCT
+                                                    DPI.SK_PROJETO_INVESTIMENTO,
+                                                    DST.SK_SUB_TIPO
+                                            FROM STG_PROJETO_INVESTIMENTO_SUB_TIPOS STG
+                                            INNER JOIN DIM_SUB_TIPO DST ON DST.NK_SUB_TIPO = CAST(STG.ID AS VARCHAR) 
+                                            INNER JOIN DIM_PROJETO_INVESTIMENTO DPI ON DPI.NK_PROJETO_INVESTIMENTO = STG.IDUNICO'''
+    sql_old_project_inv_sub_tipos =     '''SELECT
+                                                SK_PROJETO_INVESTIMENTO,
+                                                SK_SUB_TIPO 
+                                        FROM FACT_PROJETO_INVESTIMENTO_SUB_TIPOS FACT'''
+    table_name_project_inv_sub_tipos = 'public.FACT_PROJETO_INVESTIMENTO_SUB_TIPOS'
+    key_columns_project_inv_sub_tipos  = ['SK_PROJETO_INVESTIMENTO', 'SK_SUB_TIPO']
+    crud_database_table(spark, sql_old_project_inv_sub_tipos, sql_new_project_inv_sub_tipos, table_name_project_inv_sub_tipos, key_columns_project_inv_sub_tipos, connection_properties, bulk_size)
 
 
 
