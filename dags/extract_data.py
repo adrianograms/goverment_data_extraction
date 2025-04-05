@@ -191,7 +191,10 @@ def values_to_update(df_old, df_new, key_columns, compare_columns):
 
     # Aplicar o filtro
     #differences = joined_df.filter(reduce(lambda a, b: a | b, filter_condition))
-    differences = joined_df.filter(' or '.join(filter_condition))
+    if len(filter_condition) == 0:
+        differences = joined_df.filter('0 = 1')
+    else:     
+        differences = joined_df.filter(' or '.join(filter_condition))
     
     return differences.select("new.*")
 
@@ -630,7 +633,7 @@ def crud_facts(bulk_size):
                                                 FATO.SK_EIXO
                                         FROM FACT_PROJETO_INVESTIMENTO_EIXOS FATO '''
     table_name_project_inv_eixos = 'public.FACT_PROJETO_INVESTIMENTO_EIXOS'
-    key_columns_project_inv_eixos  = ['SK_PROJETO_INVESTIMENTO', 'SK_EIXO']
+    key_columns_project_inv_eixos  = ['sk_projeto_investimento', 'sk_eixo']
     crud_database_table(spark, sql_old_project_inv_eixos, sql_new_project_inv_eixos, table_name_project_inv_eixos, key_columns_project_inv_eixos, connection_properties, bulk_size)
 
     # CRUD fact_projeto_investimento_tomadores
@@ -645,7 +648,7 @@ def crud_facts(bulk_size):
                                             SK_TOMADOR
                                     FROM FACT_PROJETO_INVESTIMENTO_TOMADORES FATO '''
     table_name_project_inv_tom = 'public.FACT_PROJETO_INVESTIMENTO_TOMADORES'
-    key_columns_project_inv_tom  = ['SK_PROJETO_INVESTIMENTO', 'SK_TOMADOR']
+    key_columns_project_inv_tom  = ['sk_projeto_investimento', 'sk_tomador']
     crud_database_table(spark, sql_old_project_inv_tom, sql_new_project_inv_tom, table_name_project_inv_tom, key_columns_project_inv_tom, connection_properties, bulk_size)
 
     # CRUD fact_projeto_investimento_executores
@@ -660,7 +663,7 @@ def crud_facts(bulk_size):
                                             SK_EXECUTOR 
                                     FROM FACT_PROJETO_INVESTIMENTO_EXECUTORES FATO '''
     table_name_project_inv_exc = 'public.FACT_PROJETO_INVESTIMENTO_EXECUTORES'
-    key_columns_project_inv_exc  = ['SK_PROJETO_INVESTIMENTO', 'SK_EXECUTOR']
+    key_columns_project_inv_exc  = ['sk_projeto_investimento', 'sk_executor']
     crud_database_table(spark, sql_old_project_inv_exc, sql_new_project_inv_exc, table_name_project_inv_exc, key_columns_project_inv_exc, connection_properties, bulk_size)
 
     # CRUD fact_projeto_investimento_repassadores
@@ -675,7 +678,7 @@ def crud_facts(bulk_size):
                                             SK_REPASSADOR 
                                     FROM FACT_PROJETO_INVESTIMENTO_REPASSADORES FATO'''
     table_name_project_inv_rep = 'public.FACT_PROJETO_INVESTIMENTO_REPASSADORES'
-    key_columns_project_inv_rep  = ['SK_PROJETO_INVESTIMENTO', 'SK_REPASSADOR']
+    key_columns_project_inv_rep  = ['sk_projeto_investimento', 'sk_repassador']
     crud_database_table(spark, sql_old_project_inv_rep, sql_new_project_inv_rep, table_name_project_inv_rep, key_columns_project_inv_rep, connection_properties, bulk_size)
 
     # CRUD fact_projeto_investimento_tipos
@@ -690,7 +693,7 @@ def crud_facts(bulk_size):
                                                 SK_TIPO 
                                         FROM FACT_PROJETO_INVESTIMENTO_TIPOS FACT'''
     table_name_project_inv_tipos = 'public.FACT_PROJETO_INVESTIMENTO_TIPOS'
-    key_columns_project_inv_tipos  = ['SK_PROJETO_INVESTIMENTO', 'SK_TIPO']
+    key_columns_project_inv_tipos  = ['sk_projeto_investimento', 'sk_tipo']
     crud_database_table(spark, sql_old_project_inv_tipos, sql_new_project_inv_tipos, table_name_project_inv_tipos, key_columns_project_inv_tipos, connection_properties, bulk_size)
 
     # CRUD Fact_projeto_investimento_sub_tipos
@@ -705,7 +708,7 @@ def crud_facts(bulk_size):
                                                 SK_SUB_TIPO 
                                         FROM FACT_PROJETO_INVESTIMENTO_SUB_TIPOS FACT'''
     table_name_project_inv_sub_tipos = 'public.FACT_PROJETO_INVESTIMENTO_SUB_TIPOS'
-    key_columns_project_inv_sub_tipos  = ['SK_PROJETO_INVESTIMENTO', 'SK_SUB_TIPO']
+    key_columns_project_inv_sub_tipos  = ['sk_projeto_investimento', 'sk_sub_tipo']
     crud_database_table(spark, sql_old_project_inv_sub_tipos, sql_new_project_inv_sub_tipos, table_name_project_inv_sub_tipos, key_columns_project_inv_sub_tipos, connection_properties, bulk_size)
 
 
