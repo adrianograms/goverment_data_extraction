@@ -116,7 +116,7 @@ def extract_api_projeto_investimento_uf(url_base, endpoint, param, method, page_
         errors += 1
         executions += 1
         if response.status_code == 429:
-            time.sleep(1)
+            time.sleep(1 + errors_consecutives)
         return success, None,  page, errors_consecutives, errors, executions, response.status_code
     
 def extract_api_projeto_investimento_date(url_base, endpoint, param, method, page_size, page, errors_consecutives, errors, executions):
@@ -139,7 +139,7 @@ def extract_api_projeto_investimento_date(url_base, endpoint, param, method, pag
         errors += 1
         executions += 1
         if response.status_code == 429:
-            time.sleep(1)
+            time.sleep(1 + errors_consecutives)
         return success, None,  page, errors_consecutives, errors, executions, response.status_code
 
 def extract_api_execucao_financeira_year(url_base, endpoint, year, method, page_size, page, errors_consecutives, errors, executions):
@@ -161,7 +161,7 @@ def extract_api_execucao_financeira_year(url_base, endpoint, year, method, page_
         errors += 1
         executions += 1
         if response.status_code == 429:
-            time.sleep(1)
+            time.sleep(1 + errors_consecutives)
         return success, None,  page, errors_consecutives, errors, executions, response.status_code
     
 def values_to_update(df_old, df_new, key_columns, compare_columns):
