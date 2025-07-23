@@ -1,21 +1,8 @@
-import time
-import json
-from pathlib import Path
-import requests
-import json
-from datetime import datetime, timedelta
-from airflow.decorators import dag, task, task_group
+from datetime import datetime
+from airflow.decorators import dag, task
 from airflow.models.param import Param
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import input_file_name, substring, explode, to_date, col, regexp_replace
-from pyspark.sql.types import ArrayType
-import os.path 
-import jaydebeapi
 import os
 from dotenv import load_dotenv
-from functools import reduce
-import  psycopg2 
-from math import ceil
 from tasks.operations_task import * 
 
 load_dotenv()
@@ -63,5 +50,7 @@ def dag_get_projeto_investimento_uf(ufs, page_size, errors_limit, errors_consecu
     extract_projct_invest = extract_projeto_investimento_uf(url_base, '/obrasgov/api/projeto-investimento', ufs, page_size, errors_limit, errors_consecutives_limit, executions_limit)
 
 
+
 dag = get_api_data(initial_year, final_year, days, page_size, errors_limit, errors_consecutives_limit, executions_limit)
 dag_investimento_uf = dag_get_projeto_investimento_uf(ufs, page_size, errors_limit, errors_consecutives_limit, executions_limit)
+

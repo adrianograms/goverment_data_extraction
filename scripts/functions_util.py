@@ -14,6 +14,9 @@ from dotenv import load_dotenv
 from functools import reduce
 import  psycopg2 
 from math import ceil
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def generate_sql_deletion_ufs(tables, ufs):
     sql_full = ''
