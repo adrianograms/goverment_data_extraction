@@ -32,11 +32,11 @@ def get_api_data(initial_year, final_year, days, page_size, errors_limit, errors
     url_base = os.getenv('URL_BASE')
     bulk_size = int(os.getenv('BULK_SIZE'))
     
-    extract_exec_fin = extract_execucao_financeira(url_base, '/obrasgov/api/execucao-financeira', initial_year, final_year, page_size, errors_limit, errors_consecutives_limit, executions_limit)
+    #extract_exec_fin = extract_execucao_financeira(url_base, '/obrasgov/api/execucao-financeira', initial_year, final_year, page_size, errors_limit, errors_consecutives_limit, executions_limit)
     extract_projct_invest = extract_projeto_investimento(url_base, '/obrasgov/api/projeto-investimento', days, page_size, errors_limit, errors_consecutives_limit, executions_limit)
     crud_project = crud_projeto_investimento(bulk_size)
 
-    extract_exec_fin >> crud_project
+    #extract_exec_fin >> crud_project
     extract_projct_invest >> crud_project
 
 @dag(

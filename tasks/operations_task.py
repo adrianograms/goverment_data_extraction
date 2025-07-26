@@ -32,6 +32,7 @@ def delete_duplicates_stg():
         print(f'Deleting duplicates on table {table_name}...')
         delete_duplicates(table_name, key_columns, connection_properties)
 
+    # Not used anymore, only for history
     tables_distinct_delete = ['stg_execucao_financeira']
     for table_name in tables_distinct_delete:
         print(f'Deleting duplicates on table {table_name} using distinct...')
@@ -197,8 +198,8 @@ def crud_facts(bulk_size):
                                         DPI.SK_PROJETO_INVESTIMENTO,
                                         STG.DATAFINALPREVISTA - STG.DATAINICIALPREVISTA AS PRAZO_PREVISTO,
                                         STG.DATAFINALEFETIVA - STG.DATAINICIALEFETIVA AS PRAZO_EFETIVO,
-                                        CAST(NULLIF(STG.QDTEMPREGOSGERADOS, '') AS INTEGER) AS QTD_EMPREGOS_GERADOS,
-                                        CAST(NULLIF(STG.POPULACAOBENEFICIADA, '') AS INTEGER)  AS POP_BENEFICIADA,
+                                        CAST(NULLIF(TRIM(STG.QDTEMPREGOSGERADOS), '') AS INTEGER) AS QTD_EMPREGOS_GERADOS,
+                                        CAST(NULLIF(TRIM(STG.POPULACAOBENEFICIADA), '') AS INTEGER)  AS POP_BENEFICIADA,
                                         IP.VALOR_INVESTIMENTO_PREVISTO,
                                         COALESCE(EF.VALOR_EXECUCAO,0) AS VALOR_EXECUCAO
                                 FROM STG_PROJETO_INVESTIMENTO STG
@@ -346,6 +347,7 @@ def extract_data_api_project(url_base, endpoint, uf, page_size = 100, errors_lim
 def extract_data_api_projecto_investimento_date(url_base, endpoint, date, page_size = 100, errors_limit = -1, errors_consecutives_limit = 5, executions_limit = 200):
     method = "GET"
     path_dest_env = "PATH_DEST_PROJETO_INVESTIMENTO_DATE"
+    print('Processing Date ' + date)
     extract_api(url_base, endpoint, date, method, path_dest_env, extract_api_projeto_investimento_date, page_size, errors_limit, errors_consecutives_limit, executions_limit)
 
 @task()

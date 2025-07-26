@@ -66,7 +66,6 @@ def extract_api(url_base, endpoint, param, method, path_dest_env, fun_api, page_
             f'N° Registers: {len(content_all)}\n'
             f'Errors: {errors}\n'
             f'Errors Consecutives: {errors_consecutives}\n')
-        time.sleep(1)
 
     if success == True:
         print('Execution Finished with success!')
